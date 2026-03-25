@@ -1,0 +1,60 @@
+name: 云端自动打包安卓 APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+    - name: 1. 拉取你完美无缺的代码
+      uses: actions/checkout@v4
+
+    - name: 2. 安装 Java 17 (安卓编译必备)
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: 3. 安装 Ninja 编译工具
+      run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+    - name: 4. 使用最新 v4 插件安装 Qt 6.8.0 (自动包含电脑版和安卓版)
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.8.0'
+        target: 'android'
+        arch: 'android_arm64_v8a'
+
+    - name: 5. 动态寻路并执行终极编译
+      run: |
+        # 1. 获取系统刚装好的 qt-cmake 的确切位置
+        QTCMAKE_PATH=$(which qt-cmake)
+        echo "qt-cmake 启动器位置: $QTCMAKE_PATH"
+
+        # 2. 向上推导，精准定位到电脑版(Host)工具的绝对路径
+        QT_ANDROID_DIR=$(dirname $(dirname $QTCMAKE_PATH))
+        QT_VERSION_DIR=$(dirname $QT_ANDROID_DIR)
+        HOST_PATH="$QT_VERSION_DIR/gcc_64"
+        echo "Host 工具包位置: $HOST_PATH"
+
+        mkdir build && cd build
+        
+        # 3. 挂载所有武器，启动编译！
+        # -DQT_NO_PACKAGE_VERSION_CHECK=TRUE 用于强制让系统闭嘴，完美接纳你的 6.8.3 代码
+        qt-cmake .. -GNinja \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DQT_HOST_PATH=$HOST_PATH \
+          -DQT_NO_PACKAGE_VERSION_CHECK=TRUE
+
+        cmake --build . --parallel
+        cmake --build . --target appIot_make_apk
+
+    - name: 6. 提取你的 APK 战利品！
+      uses: actions/upload-artifact@v4
+      with:
+        name: 智能终端_Android_APK
+        path: build/**/*.apk
