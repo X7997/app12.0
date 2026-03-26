@@ -14,7 +14,7 @@ Window {
     visible: true
     color: "#F2F2F7"
 
-    // ==================== 属性定义 (仅新增了灵动岛控制状态) ====================
+    // ==================== 属性定义 ====================
 
     property string fixedPhoneNumber: "19731194079"
     property string currentLonLat: "等待数据接入"
@@ -33,13 +33,6 @@ Window {
     property bool hasReceivedData: false
     property bool fallDetected: false
 
-    // 灵动岛核心状态控制
-    property bool showCallIsland: false
-    property bool showSmsIsland: false
-    property bool isHangingUp: false       // 是否处于挂断中的2-3秒展示期
-    property bool isEmergencyAlert: false  // 紧急状态双闪开关
-    property string islandMessage: ""
-
     property int currentPage: 0
     property int unreadCount: 0
 
@@ -55,7 +48,7 @@ Window {
     property bool isInCall: false
     property bool isNavigating: false
 
-    // ==================== 数据模型 (原封不动) ====================
+    // ==================== 数据模型 ====================
 
     ListModel { id: fallRecords }
     ListModel { id: chatRecords }
@@ -98,15 +91,11 @@ Window {
 
         function onCallCompleted(success) {
             callStatus = 0
-            showCallIsland = true
             isInCall = true
-            // 呼叫完成不再自动隐藏，等待用户手动点击挂断
         }
 
         function onSmsCompleted(success) {
             smsStatus = 0
-            showSmsIsland = true
-            smsIslandTimer.start() // 短信纸飞机展示3.5秒
         }
     }
 
@@ -141,32 +130,12 @@ Window {
         }
     }
 
-    // 挂断电话后的红色图标延迟消失定时器 (3秒)
-    Timer {
-        id: hangupDelayTimer
-        interval: 3000
-        onTriggered: {
-            isHangingUp = false
-            isInCall = false
-            showCallIsland = false
-        }
-    }
-
-    // 短信纸飞机展示定时器 (4秒)
-    Timer {
-        id: smsIslandTimer
-        interval: 4000
-        onTriggered: showSmsIsland = false
-    }
-
     // 紧急报警自动挂断定时器 (5秒)
     Timer {
         id: emergencyAlertTimer
         interval: 5000
         onTriggered: {
-            isEmergencyAlert = false
             isInCall = false
-            showCallIsland = false
         }
     }
 
@@ -191,7 +160,6 @@ Window {
             if (typeof cloudManager !== "undefined") {
                 cloudManager.sendCommand("call", jsonPayload)
             }
-            showCallIsland = true
             isInCall = true
         }
     }
@@ -209,8 +177,6 @@ Window {
             if (typeof cloudManager !== "undefined") {
                 cloudManager.sendCommand("sms", jsonPayload)
             }
-            showSmsIsland = true
-            smsIslandTimer.start()
         }
     }
 
@@ -237,8 +203,6 @@ Window {
         })
         if (typeof cloudManager !== "undefined") { cloudManager.sendCommand("call", callJson) }
 
-        isEmergencyAlert = true
-        showCallIsland = true
         isInCall = true
         emergencyAlertTimer.start() // 5秒后自动关
 
@@ -258,13 +222,13 @@ Window {
         if (fallRecords.count > 10) { fallRecords.remove(10) }
     }
 
-    // ==================== UI组件：顶部导航栏 (Apple简约高级风) ====================
+    // ==================== UI组件：顶部导航栏 ====================
 
     Rectangle {
         id: navBar
         width: parent.width
-        height: root.height > 800 ? 94 : 74 // 增加高度包容灵动岛和状态栏
-        color: "#F9F9F9" // 苹果常用的高级浅灰底色
+        height: root.height > 800 ? 94 : 74 
+        color: "#F9F9F9" 
         opacity: 0.95
         z: 9
 
@@ -282,7 +246,7 @@ Window {
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: 6
 
-            // 小圆点移到这里配合标题
+            // 小圆点
             Rectangle {
                 id: statusIndicator
                 width: 6
@@ -324,112 +288,7 @@ Window {
         }
     }
 
-    // ==================== UI组件：灵动岛 (严格按需重构) ====================
-
-    Rectangle {
-        id: dynamicIsland
-
-        width: Math.min(Math.max(root.width * 0.35, 120), 160)
-        height: 36
-        radius: height / 2
-        color: "#000000"
-        z: 20
-
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: parent.top
-        anchors.topMargin: root.height > 800 ? 11 : 8
-
-        // ================= 左侧区域 (电话 / 短信 / 紧急) =================
-        Row {
-            anchors.left: parent.left
-            anchors.leftMargin: 14
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 6
-
-            // 1. 紧急闪现标 (左)
-            Rectangle {
-                width: 12; height: 12; radius: 6
-                color: "#FF3B30"
-                visible: isEmergencyAlert
-                SequentialAnimation on opacity {
-                    loops: Animation.Infinite; running: isEmergencyAlert
-                    NumberAnimation { from: 1; to: 0.1; duration: 250 }
-                    NumberAnimation { from: 0.1; to: 1; duration: 250 }
-                }
-            }
-
-            // 改成：
-            Image {
-                width: 14
-                height: 14
-                source: imgCallIcon
-                fillMode: Image.PreserveAspectFit
-                anchors.verticalCenter: parent.verticalCenter
-                visible: (isInCall || isHangingUp) && !isEmergencyAlert
-
-                // 如果需要颜色变化，可以用 layer 效果
-                layer.enabled: true
-            }
-
-            // 改成：
-            Image {
-                width: 14
-                height: 14
-                source: imgSmsIcon
-                fillMode: Image.PreserveAspectFit
-                anchors.verticalCenter: parent.verticalCenter
-                visible: showSmsIsland && !isInCall && !isEmergencyAlert
-            }
-        }
-
-        // ================= 右侧区域 (常亮连接灯 / 紧急) =================
-        Row {
-            anchors.right: parent.right
-            anchors.rightMargin: 14
-            anchors.verticalCenter: parent.verticalCenter
-
-            // 1. 紧急闪现标 (右)
-            Rectangle {
-                width: 12; height: 12; radius: 6
-                color: "#FF3B30"
-                visible: isEmergencyAlert
-                SequentialAnimation on opacity {
-                    loops: Animation.Infinite; running: isEmergencyAlert
-                    NumberAnimation { from: 1; to: 0.1; duration: 250 }
-                    NumberAnimation { from: 0.1; to: 1; duration: 250 }
-                }
-            }
-
-            // 2. 纯净常亮灯 (不是呼吸灯)
-            Rectangle {
-                width: 6; height: 6; radius: 3
-                // 连接成功=绿，连接中=橙，未连接=透明(黑)
-                color: connStatus === 2 ? "#34C759" : (connStatus === 1 ? "#FF9500" : "transparent")
-                visible: !isEmergencyAlert
-            }
-        }
-
-        // ================= 交互区域 =================
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                if (isEmergencyAlert) {
-                    // 如果在紧急响铃，点一下直接切断
-                    isEmergencyAlert = false
-                    isInCall = false
-                    showCallIsland = false
-                    emergencyAlertTimer.stop()
-                } else if (isInCall && !isHangingUp) {
-                    // 如果在通话中，点一下执行挂断过程
-                    isHangingUp = true
-                    hangupDelayTimer.start() // 触发变红并倒计时消失
-                }
-            }
-        }
-    }
-
-
-    // ==================== 主内容区 (原封不动) ====================
+    // ==================== 主内容区 ====================
 
     Item {
         id: pageContent
@@ -728,25 +587,20 @@ Window {
                     Layout.margins: 16
 
                     delegate: Item {
-                        // 1. 透明的最外层容器，撑满整个列表的宽度
                         width: chatListView.width - 32
-                        // 高度由内部的气泡高度决定，加上一点上下间距
                         height: messageBubble.height + 10
 
                         Rectangle {
                             id: messageBubble
 
-                            // 2. 核心对齐魔法：用户消息靠右，AI消息靠左
                             anchors.right: model.isUser ? parent.right : undefined
                             anchors.left: model.isUser ? undefined : parent.left
 
-                            // 3. 气泡宽度自适应：不要固定宽度！
-                            // 取文字的实际宽度和最大允许宽度（比如屏幕宽度的75%）的较小值
                             width: Math.min(messageContent.implicitWidth + 24, parent.width * 0.75)
                             height: messageContent.implicitHeight + 24
 
                             radius: 12
-                            color: model.isUser ? "#8E8E93" : "#FFFFFF" // 用户是蓝色，AI是浅灰色
+                            color: model.isUser ? "#8E8E93" : "#FFFFFF" 
 
                             ColumnLayout {
                                 id: messageContent
@@ -758,7 +612,7 @@ Window {
                                     text: model.message
                                     font.pixelSize: 14
                                     color: model.isUser ? "#FFFFFF" : "#1D1D1F"
-                                    wrapMode: Text.Wrap // 允许长文本换行
+                                    wrapMode: Text.Wrap 
                                     Layout.fillWidth: true
                                 }
 
@@ -766,7 +620,6 @@ Window {
                                     text: model.time
                                     font.pixelSize: 10
                                     color: model.isUser ? "rgba(255, 255, 255, 0.7)" : "#8E8E93"
-                                    // 时间戳对齐：用户靠右，AI靠左
                                     Layout.alignment: model.isUser ? Qt.AlignRight : Qt.AlignLeft
                                 }
                             }
@@ -777,7 +630,7 @@ Window {
         }
     }
 
-    // ==================== UI组件：底部标签栏 (原封不动) ====================
+    // ==================== UI组件：底部标签栏 ====================
 
     Rectangle {
         id: tabBar
@@ -861,7 +714,7 @@ Window {
         }
     }
 
-    // ==================== 弹出对话框：打电话 (高级风 - 原封不动) ====================
+    // ==================== 弹出对话框：打电话 ====================
 
     Rectangle {
         id: callDialog
@@ -909,7 +762,6 @@ Window {
                     text: customPhoneNumber
                     onTextChanged: customPhoneNumber = text
 
-                    // 关键：设置文字居中对齐
                     verticalAlignment: Text.AlignVCenter
 
                     background: Rectangle {
@@ -958,7 +810,7 @@ Window {
         }
     }
 
-    // ==================== 弹出对话框：发短信 (高级风 - 原封不动) ====================
+    // ==================== 弹出对话框：发短信 ====================
 
     Rectangle {
         id: smsDialog
@@ -1006,7 +858,6 @@ Window {
                     text: customPhoneNumber
                     onTextChanged: customPhoneNumber = text
 
-                    // 关键：设置文字居中对齐
                     verticalAlignment: Text.AlignVCenter
 
                     background: Rectangle {
@@ -1028,7 +879,6 @@ Window {
                     text: customSmsContent
                     onTextChanged: customSmsContent = text
 
-                    // 关键：设置文字居中对齐
                     verticalAlignment: Text.AlignVCenter
 
                     background: Rectangle {
