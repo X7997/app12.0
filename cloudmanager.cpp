@@ -19,6 +19,14 @@
  */
 CloudManager::CloudManager(QObject *parent) : QObject(parent)
 {
+    // ==========================================
+    // 【安全插入区】在这里加上你的初始默认位置
+    // ==========================================
+    m_lastLon = 113.568817;
+    m_lastLat = 23.303581;
+    m_hasLocation = true;  // 骗过系统，让它以为我们已经有位置了
+    // ==========================================
+    
     m_client = new QMqttClient(this);
     m_netManager = new QNetworkAccessManager(this);
 
@@ -110,6 +118,7 @@ CloudManager::CloudManager(QObject *parent) : QObject(parent)
             qDebug() << "未能从消息中提取到经纬度";
         }
     });
+    fetchAddress(m_lastLon, m_lastLat);
 }
 
 /**
